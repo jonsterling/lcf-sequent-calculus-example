@@ -14,8 +14,10 @@ struct
 
   fun out (_ BY m) = m
 
-  fun infer _ = raise Match
-  fun check _ = raise Match
+  fun infer (ctx !- p BY _) = ctx ===> p
+  fun check (ctx ===> p) (ctx' !- p' BY _) =
+    if ctx = ctx' andalso p = p' then () else
+      raise Fail "Checking failed"
 
   fun hyp (ctx, i) =
     ctx !- List.nth (ctx, i)
