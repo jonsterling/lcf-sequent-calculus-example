@@ -1,10 +1,13 @@
 Group is
   $/basis.cm
+  src/refinement.sig
+  src/tactic.sig
+
   src/syntax.sig
   src/syntax.sml
   src/kernel.sig
   src/refiner.sig
-  
+
   src/refiner.fun
   src/kernel_checked.sml
   src/kernel_term.sml

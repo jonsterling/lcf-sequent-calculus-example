@@ -9,9 +9,10 @@ struct
 
   type goal = sequent
   type subgoals = goal list
-  type validation = K.proof list -> K.proof
+  type proof = K.proof
+  type validation = proof list -> proof
   type state = subgoals * validation
-  type tactic = goal -> state
+  type rule = goal -> state
 
   val trueR = 
     fn ctx ===> TRUE => ([], fn rho => K.unit)
@@ -76,3 +77,6 @@ struct
        fn [m1, m2] => K.push (K.app (K.hyp i, m1), m2))
     end
 end
+
+structure TermRefiner = Refiner (TermKernel)
+structure CheckedRefiner = Refiner (CheckedKernel)
