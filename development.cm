@@ -8,5 +8,7 @@ Group is
   src/kernel.sig
   src/refiner.sig
 
+  src/tactic.fun
+
   src/kernel.sml
   src/refiner.fun

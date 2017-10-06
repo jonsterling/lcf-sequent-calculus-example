@@ -6,7 +6,10 @@ sig
     where type goal = K.S.sequent
     where type proof = K.proof
 
-  (* The "refiner" implements backward/bottom-up inference, which is best captured by the sequent calculus. *)
+  (* The "refiner" implements backward/bottom-up inference, which is best captured by the sequent calculus.
+     Refinement rules consist in a decomposition of a goal into subgoals, together with a "validation",
+     which is a procedure that combines evidence of the subgoals into a forward proof of the main 
+     goal. *)
 
   type hyp = K.S.hyp
 

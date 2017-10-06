@@ -11,8 +11,9 @@ struct
   type subgoals = goal list
   type proof = K.proof
   type validation = proof list -> proof
-  type state = subgoals * validation
-  type rule = goal -> state
+  type rule = goal -> subgoals * validation
+
+  val prettyGoal = Sequent.pretty
 
   val trueR = 
     fn ctx ===> TRUE => ([], fn rho => K.unit ctx)
@@ -78,4 +79,4 @@ struct
     end
 end
 
-structure Refiner= Refiner (Kernel)
+structure Refiner = Refiner (Kernel)
