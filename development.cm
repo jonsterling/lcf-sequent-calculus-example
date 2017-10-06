@@ -8,6 +8,5 @@ Group is
   src/kernel.sig
   src/refiner.sig
 
+  src/kernel.sml
   src/refiner.fun
-  src/kernel_checked.sml
-  src/kernel_term.sml

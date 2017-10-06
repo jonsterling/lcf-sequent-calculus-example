@@ -15,16 +15,16 @@ struct
   type rule = goal -> state
 
   val trueR = 
-    fn ctx ===> TRUE => ([], fn rho => K.unit)
+    fn ctx ===> TRUE => ([], fn rho => K.unit ctx)
      | _ => raise Fail "trueR"
 
   fun falseL i (ctx ===> p) =
-    ([], fn rho => K.abort (K.hyp i, p))
+    ([], fn rho => K.abort (K.hyp (ctx, i), p))
 
   val conjR = 
     fn ctx ===> p /\ q =>
        ([ctx ===> p, ctx ===> q],
-        fn [m1, m2] => K.pair (m1, m2))
+        fn [d1, d2] => K.pair (d1, d2))
      | _ => raise Fail "conjR"
 
   fun conjL1 i (ctx ===> r) =
@@ -32,7 +32,7 @@ struct
       val p /\ _ = List.nth (ctx, i)
     in
       ([p :: ctx ===> r],
-       fn [m] => K.push (K.fst (K.hyp i), m))
+       fn [d] => K.push (K.fst (K.hyp (ctx, i)), d))
     end
 
   fun conjL2 i (ctx ===> r) = 
@@ -40,19 +40,19 @@ struct
       val _ /\ q = List.nth (ctx, i)
     in
       ([q :: ctx ===> r],
-       fn [m] => K.push (K.snd (K.hyp i), m))
+       fn [d] => K.push (K.snd (K.hyp (ctx, i)), d))
     end
 
   val disjR1 = 
     fn ctx ===> p \/ q => 
        ([ctx ===> p],
-        fn [m] => K.inl (m, q))
+        fn [d] => K.inl (d, q))
      | _ => raise Fail "disjR1"
 
   val disjR2 = 
     fn ctx ===> p \/ q => 
        ([ctx ===> q],
-        fn [m] => K.inr (p, m))
+        fn [d] => K.inr (p, d))
      | _ => raise Fail "disjR2"
 
   fun disjL i (ctx ===> r) = 
@@ -60,13 +60,13 @@ struct
       val p \/ q = List.nth (ctx, i)
     in
       ([p :: ctx ===> r, q :: ctx ===> r],
-       fn [m1, m2] => K.case_ (K.hyp i, (m1, m2)))
+       fn [d1, d2] => K.case_ (K.hyp (ctx, i), (d1, d2)))
     end
 
   val implR = 
     fn ctx ===> p ~> q =>
        ([p :: ctx ===> q],
-        fn [m] => K.lam (p, m))
+        fn [d] => K.lam d)
      | _ => raise Fail "implR"
 
   fun implL i (ctx ===> r) = 
@@ -74,9 +74,8 @@ struct
       val p ~> q = List.nth (ctx, i)
     in
       ([ctx ===> p, q :: ctx ===> r],
-       fn [m1, m2] => K.push (K.app (K.hyp i, m1), m2))
+       fn [d1, d2] => K.push (K.app (K.hyp (ctx, i), d1), d2))
     end
 end
 
-structure TermRefiner = Refiner (TermKernel)
-structure CheckedRefiner = Refiner (CheckedKernel)
+structure Refiner= Refiner (Kernel)
