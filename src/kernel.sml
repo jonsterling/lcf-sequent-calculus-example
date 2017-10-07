@@ -25,7 +25,7 @@ struct
   fun trueR ctx =
     ctx ===> TRUE BY TRUER
   
-  fun falseL (ctx, i, p) =
+  fun falseL (i, ctx ===> p) =
     let
       val FALSE = List.nth (ctx, i)
     in

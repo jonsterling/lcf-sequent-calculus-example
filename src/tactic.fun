@@ -17,10 +17,6 @@ functor Tactic (R : REFINER) : TACTIC =
 struct
   open R
 
-  datatype result =
-     OK of subgoals * validation
-   | BAD of exn
-
   type tactic = goal -> subgoals * validation
 
   fun gobbleWith ([], []) args = []

@@ -43,7 +43,7 @@ sig
   val init : S.context * S.hyp -> proof
 
   val trueR : S.context -> proof
-  val falseL : S.context * S.hyp * P.prop -> proof
+  val falseL : S.hyp * S.sequent -> proof
 
   val conjR : proof * proof -> proof
   val conjL1 : S.hyp * proof -> proof

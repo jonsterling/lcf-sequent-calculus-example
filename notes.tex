@@ -1,0 +1,734 @@
+\documentclass{article}
+\usepackage[tt=false]{libertine}
+\usepackage[usenames,dvipsnames,svgnames,table]{xcolor}
+\usepackage{amsmath, amssymb, proof, microtype, hyperref}
+\usepackage{mathpartir} % for mathpar, not for proofs
+\usepackage{hyperref}
+
+\usepackage{minted}
+
+\newcommand\FormatLang[1]{{\bfseries\sffamily #1}}
+\newcommand\StandardML{\FormatLang{Standard~ML}}
+\newcommand\SML{\FormatLang{SML}}
+\newcommand\LCF{\FormatLang{LCF}}
+\newcommand\Coq{\FormatLang{Coq}}
+\newcommand\Isabelle{\FormatLang{Isabelle}}
+\newcommand\Seq[2]{{#1}\Longrightarrow{#2}}
+\newcommand\Right[1]{{#1}\mathsf{R}}
+\newcommand\Left[1]{{#1}\mathsf{L}}
+\newcommand\RuleInit{\mathsf{init}}
+
+\usepackage{amsthm}
+\theoremstyle{definition}
+\newtheorem{example}{Example}[section]
+\newtheorem{exercise}{Exercise}[section]
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+
+
+\title{Implementing Inference Rules in \StandardML}
+\author{Jon Sterling}
+
+\begin{document}
+\maketitle
+
+Operationalizing inference rules in a computer program for proof
+checking or proof search is an important skill. In this tutorial, we
+will explain and demonstrate some basic techniques for implementing
+forward and backward inference in the \LCF{}
+style~\cite{gordon-milner-wadsworth:1979,paulson:1987,gordon:2000}.
+
+When implementing a logical system in a programming language, it is
+important to understand and minimize the size of the portion of this
+system which must be ``trusted'', i.e.\ on which the correctness of
+the implementation depends. This is usually achieved by designing a
+\emph{trusted kernel} with an abstract type together with some
+operations for constructing elements of that type; then, the only way
+to produce an object of this type is by calling the provided
+functions.
+
+An \LCF{} kernel consists in such an abstract type \verb|proof|,
+together with functions which construct proofs according to the rules
+of inference of the logic. Then, you can use any programming
+techniques you want (even unsafe ones) to produce proofs, and any such
+proof which is actually produced is guaranteed to be correct relative
+to the correctness of the kernel.
+
+\section{Representing Syntax}
+
+The syntax of propositions and sequents in represented in \SML{} using
+\emph{datatypes}. For instance, we can represent the syntax of
+propositional logic as follows:
+
+\begin{minted}[mathescape]{sml}
+datatype prop =
+   TRUE                 (* $\top$ *)
+ | FALSE                (* $\bot$ *)
+ | ATOM of string       (* A *)
+ | CONJ of prop * prop  (* $A\land B$ *)
+ | DISJ of prop * prop  (* $A\lor B$ *)
+ | IMPL of prop * prop  (* $A\supset B$ *)
+\end{minted}
+
+It is often convenient to use infix notation in \SML{} for the
+connectives; but note that you need to declare the fixity of these
+operators.
+
+\begin{minted}[mathescape]{sml}
+datatype prop =
+   TRUE               (* $\top$ *)
+ | FALSE              (* $\bot$ *)
+ | ` of string        (* $A$ *)
+ | /\ of prop * prop  (* $A\land B$ *)
+ | \/ of prop * prop  (* $A\lor B$ *)
+ | ~> of prop * prop  (* $A\supset B$ *)
+
+infixr 3 ~>
+infixr 4 /\ \/
+\end{minted}
+
+
+Contexts are represented as lists of propositions, and we represent
+sequents as a context together with a proposition:
+
+\begin{minted}[mathescape]{sml}
+type context = prop list
+datatype sequent = ===> of context * prop (* $\Seq{\Gamma}{A}$ *)
+infixr 0 ===>
+\end{minted}
+
+\begin{example}[Structural recursion]
+  Using pattern matching in \SML, we can write a function that
+  processes the syntax of propositions. Here is such a function which
+  counts how deep a proposition is:
+\begin{minted}{sml}
+val rec depth =
+  fn TRUE => 0
+   | FALSE => 0
+   | `_ => 0
+   | a /\ b => Int.max (depth a, depth b) + 1
+   | a \/ b => Int.max (depth a, depth b) + 1
+   | a ~> b => Int.max (depth a, depth b) + 1
+\end{minted}
+
+  Note that the above is only a more compact notation for the
+  following equivalent \SML{} program:
+\begin{minted}[mathescape]{sml}
+fun depth TRUE = 0
+  | depth FALSE = 0
+  | depth (`_) = 0
+  | depth (a /\ b) = Int.max (depth a, depth b)
+  (* $\cdots$ *)
+\end{minted}
+
+\end{example}
+
+\begin{exercise}[Pretty printing]
+  Write a function to convert propositions into strings, adding
+  parentheses in exactly the necessary and sufficient places according
+  to the precedence of the grammar of propositions. Your solution need
+  not account for associativity.
+\end{exercise}
+
+
+\section{Forward Inference Kernel}
+
+Usually the trusted kernel of a \LCF{}-based proof assistant consists
+in an implementation of \emph{forward inference}, which is inference
+from premises to conclusion. We begin with the \emph{signature} for a
+\LCF{} kernel of the intuitionistic sequent calculus; in \SML{},
+signatures serve as type specifications for entire \emph{structures}
+(modules).
+
+\begin{minted}[mathescape]{sml}
+signature KERNEL =
+sig
+  type proof
+
+  (* What sequent is this a proof of? *)
+  val infer : proof -> sequent
+\end{minted}
+We represent hypotheses as indices into the context.
+\begin{minted}[mathescape]{sml}
+  type hyp = int
+\end{minted}
+Next, we give signatures for the rules of intuitionistic sequent
+calculus, as functions on the type \verb|proof|; these functions may
+take additional parameters which are necessary in order to ensure that
+an actual sequent calculus derivation is uniquely determined by a
+value of type \verb|proof|.
+\begin{minted}[mathescape]{sml}
+  val init : context * hyp -> proof        (* $\RuleInit$ *)
+  val trueR : context -> proof             (* $\Right{\top}$ *)
+  val falseL : hyp * sequent -> proof      (* $\Left{\bot}$ *)
+  val conjR : proof * proof -> proof       (* $\Right{\land}$ *)
+  val conjL1 : hyp * proof -> proof        (* $\Left{\land}_1$ *)
+  val conjR2 : hyp * proof -> proof        (* $\Left{\land}_2$ *)
+  val disjR1 : proof * prop -> proof       (* $\Right{\lor}_1$ *)
+  val disjR2 : prop * proof -> proof       (* $\Right{\lor}_2$ *)
+  val disjL : hyp * proof * proof -> proof (* $\Left{\lor}$ *)
+  val implR : proof -> proof               (* $\Right{\supset}$ *)
+  val implL : hyp * proof * proof          (* $\Left{\supset}$ *)
+end
+\end{minted}
+
+Next, we need to \emph{implement} this signature as structure. To do
+this, we declare a structure called \verb|Kernel| which
+\textbf{opaquely} ascribes the signature \verb|KERNEL|; opaque
+ascription, written using \verb|:>| below, ensures that the
+implementation of the type \verb|proof| remains abstract, i.e.\ no
+client of the \verb|Kernel| structure can see its actual concrete
+representation. This is what ensures that only the kernel needs to be
+verified and trusted!
+
+\begin{minted}[mathescape]{sml}
+structure Kernel :> KERNEL =
+struct
+\end{minted}
+At this point, we have to decide on an internal representation of
+proofs. We could choose a \emph{transient} representation, in which
+the proof trace is forgotten:
+\begin{minted}[mathescape]{sml}
+  type proof = sequent
+  fun infer s = s
+\end{minted}
+Then, the implementations of the rules would simply check that their
+parameters and premises have the right form, and raise an exception if
+they do not. For instance:
+\begin{minted}[mathescape]{sml}
+  (* $\infer[\RuleInit]{\Seq{\Gamma,A,\Delta}{A}}{}$ *)
+  fun init (ctx, i) =
+    ctx ===> List.nth (ctx, i)
+
+  (* $\infer[\Right{\top}]{\Seq{\Gamma}{\top}}{}$ *)
+  fun trueR ctx =
+    ctx ===> TRUE
+
+  (* $\infer[\Left{\bot}]{\Seq{\Gamma,\bot,\Delta}{a}}{}$ *)
+  fun falseL (i, ctx ===> a) =
+    if List.nth (ctx, i) = FALSE then
+      ctx ===> a
+    else
+      raise Fail "falseL not applicable"
+
+  (* $\infer[\Right{\land}]{\Seq{\Gamma}{A\land B}}{\Seq{\Gamma}{A}\quad \Seq{\Gamma}{B}}$ *)
+  fun conjR (ctx1 ===> a1, ctx2 ===> a2) =
+    if ctx1 = ctx2 then
+      ctx1 ===> a1 /\ a2
+    else
+      raise Fail "conjR not applicable"
+
+  (* $\infer[\Left{\land}_1]{\Seq{\Gamma,A\land B,\Delta}{C}}{\Seq{\Gamma,A\land B,\Delta,A}{C}}$ *)
+  fun conjL1 (i, ctx ===> c) =
+    case ctx of
+       a :: ctx' =>
+       (case List.nth (ctx', i) of
+           a' /\ b =>
+             if a = a' then
+               ctx' ===> c
+             else
+               raise Fail "conjL1 not applicable"
+         | _ => raise Fail "conjL1 not applicable")
+     | _ => raise Fail "conjL1 not applicable"
+
+  (* and so on *)
+\end{minted}
+Now, a cleaner and more robust way to write the above rule is the
+following:
+\begin{minted}[mathescape]{sml}
+  (* $\infer[\Left{\land}_1]{\Seq{\Gamma,A\land B,\Delta}{C}}{\Seq{\Gamma,A\land B,\Delta,A}{C}}$ *)
+  fun conjL1 (i, ctx ===> c) =
+    let
+      val a :: ctx' = ctx
+      val a' /\ b = List.nth (ctx', i)
+      val true = a = a'
+    in
+      ctx' ===> c
+    end
+    handle _ => raise Fail "conjL1 not applicable"
+\end{minted}
+This pattern is also applicable to the other rules of inference. We
+leave the implementation of the remaining rules as an exercise.
+\begin{minted}[mathescape]{sml}
+end
+\end{minted}
+
+\subsection{Evidence-Producing Kernels}
+
+The kernel described in the previous section is sufficient for
+developing and checking sequent calculus proofs. For instance,
+consider the following sequent calculus derivation:
+\[
+  \infer[\Left{\land}_1]{
+    \Seq{A\land B}{A}
+  }{
+    \infer[\RuleInit]{
+      \Seq{A\land B, A}{A}
+    }{
+    }
+  }
+\]
+
+This is encoded in our kernel as follows:
+\begin{minted}[mathescape]{sml}
+structure K = Kernel
+val d : K.proof = K.conjL1 (0, K.init ([`"A", `"A" /\ `"B"], 0))
+\end{minted}
+
+However, the proof object \verb|d| above does not actually contain any
+information about how the proof was derived; it may be more accurate
+to call it a ``proof certificate'' than to call it a ``proof''. If we
+wish to be able to inspect the proof derivation after it has been
+constructed, we may provide a different implementation of the
+\verb|KERNEL| signature where the type \verb|proof| is implemented by
+some kind of proof tree.
+
+However, if we do this, then we lose abstraction: someone else could
+easily produce such a proof tree outside of our kernel. How can we
+cleanly achieve both abstraction and inspectability of proofs? One
+approach is to use a \emph{view} together with an abstract type.
+
+Let us begin by defining a type parametric in some type variable
+\verb|'a|, which captures the shape of sequent calculus proof trees,
+but does not allows the subtrees to be implemented by \verb|'a|.
+
+\begin{minted}[mathescape]{sml}
+type hyp = int
+
+datatype 'a deriv =
+   INIT of hyp
+ | TRUE_R
+ | FALSE_L of hyp
+ | CONJ_R of 'a * 'a
+ | CONJ_L1 of hyp * 'a
+ | CONJ_L2 of hyp * 'a
+ | DISJ_R1 of 'a
+ | DISJ_R2 of 'a
+ | DISJ_L of hyp * 'a * 'a
+ | IMPL_R of 'a
+ | IMPL_L of hyp * 'a * 'a
+\end{minted}
+
+The idea is that the position of subtrees in each derivation rule are
+replaced with \verb|'a|. Now, we can interleave the abstract proof
+type with the type of derivations by supplying it for \verb|'a| in the
+following way:
+
+\begin{minted}[mathescape]{sml}
+structure EvidenceKernel :>
+sig
+  include KERNEL
+  val unroll : proof -> proof deriv
+end =
+struct
+  datatype proof = BY of sequent * proof deriv
+  infix BY
+
+  fun infer (s BY _) = s
+  fun unroll (_ BY m) = m
+
+  fun init (ctx, i) =
+    ctx ===> List.nth (ctx, i) BY INIT i
+    handle _ => raise Fail "init not applicable"
+
+  fun trueR ctx =
+    ctx ===> TRUE BY TRUE_R
+
+  fun falseL (i, ctx ===> p) =
+    let
+      val FALSE = List.nth (ctx, i)
+    in
+      ctx ===> p BY (FALSE_L i)
+    end
+    handle _ => raise Fail "falseL not applicable"
+
+  fun conjR (d1 as ctx1 ===> p1 BY _, d2 as ctx2 ===> p2 BY _) =
+    let
+      val true = ctx1 = ctx2
+    in
+      ctx1 ===> (p1 /\ p2) BY CONJ_R (d1, d2)
+    end
+    handle _ => raise Fail "conjR not applicable"
+
+  fun conjL1 (i, d as ctx ===> r BY _) =
+    let
+      val p :: ctx' = ctx
+      val p' /\ q = List.nth (ctx, i)
+      val true = p = p'
+    in
+      ctx' ===> r BY CONJ_L1 (i, d)
+    end
+    handle _ => raise Fail "conjL1 not applicable"
+
+  (* and so on *)
+end
+\end{minted}
+
+\begin{exercise}
+  Now construct a \SML{} function to pretty print the derivation that
+  corresponds to a value of type \verb|EvidenceKernel.proof|, using
+  \verb|EvidenceKernel.unroll| and structural recursion.
+\begin{minted}[mathescape]{sml}
+fun pretty (d : proof) : string =
+  raise Fail "TODO"
+\end{minted}
+\end{exercise}
+
+
+\section{Refinement Proof and Backward Inference}
+
+It is often frustrating to construct proofs manually using the
+primitives that are exposed by a forward inference kernel
+\verb|K:KERNEL|. Informally, sequent calculus is optimized for upward
+(backward) inference from premise to conclusion; the kernel seems to
+force us to perform proofs inside-out. When using the kernel, it is
+also necessary to pass annoying parameters, such as the context
+parameter in \verb|K.trueR|.
+
+Separately for any such kernel, we can develop what is called a
+\emph{refiner}, which is a module that allows us to construct proofs
+from the bottom up, without needing to pass in any unnecessary
+parameters. Regarded as a component of a proof system, because the
+refiner ultimately is a mode of use of the kernel, it does not need to
+be trusted.
+
+In the context of refinement proof, we will use the word ``goal'' to
+mean a sequent. A \emph{refinement rule} is a partial function that
+assigns to some goal a list of subgoals, together with a
+\emph{validation}. The input goal correspond to the \emph{conclusion}
+of a sequent calculus rule, and the subgoals correspond to the
+premises. A \emph{validation} is a function that takes a list of
+\verb|proof| objects (proofs of the premises) and constructs a new
+\verb|proof| object (a proof of the conclusion). Validations are
+always constructed using the forward inference rules exposed by the
+kernel.
+
+
+In \SML{}, these concepts are rendered as follows:
+\begin{minted}[mathescape]{sml}
+type goal = sequent
+type subgoals = goal list
+type validation = K.proof list -> K.proof
+type rule = goal -> subgoals * validation
+\end{minted}
+
+A completed refinement proof produces the empty list of subgoals;
+therefore, its validation can be instantiated with the empty list of
+proofs, yielding a proof of the main conclusion.
+
+We will implement the refiner as a structure \emph{fibered} over a
+kernel \verb|K|:
+\begin{minted}[mathescape]{sml}
+signature REFINER =
+sig
+  structure K : KERNEL
+  type goal = sequent
+  type subgoals = goal list
+  type validation = K.proof list -> K.proof
+  type rule = goal -> subgoals * validation
+
+  val init : hyp -> rule
+  val trueR : rule
+  val falseL : hyp -> rule
+  val conjR : rule
+  val conjL1 : hyp -> rule
+  val conjL2 : hyp -> rule
+  val disJR1 : rule
+  val disjR2 : rule
+  val disjL : rule
+  val implR : rule
+  val implL : rule
+end
+\end{minted}
+
+Such a signature is implemented via a \emph{functor} from any kernel
+\verb|K|:
+\begin{minted}[mathescape]{sml}
+functor Refiner (K : KERNEL) : REFINER =
+struct
+  structure K = K
+  type goal = sequent
+  type subgoals = goal list
+  type validation = K.proof list -> K.proof
+  type rule = goal -> subgoals * validation
+\end{minted}
+Now observe how we implement the backward inference version of
+$\RuleInit$. The input to our function is the \emph{conclusion} of the
+rule, and we check that the side conditions are satisfied; then we
+return the empty list of subgoals (there were no premises), and for
+the validation, we call \verb|K.init| from the kernel.
+\begin{minted}[mathescape]{sml}
+  fun init i (ctx ===> a) =
+    let
+      val true = List.nth (ctx, i) = a
+    in
+      ([], fn [] => K.init (ctx, i))
+    end
+    handle _ => raise Fail "init not applicable"
+\end{minted}
+
+The next two rules follow a similar pattern and are not very interesting.
+\begin{minted}[mathescape]{sml}
+  fun trueR (ctx ===> a) =
+    let
+      val TRUE = a
+    in
+      ([], fn [] => K.trueR ctx)
+    end
+    handle _ => raise Fail "trueR not applicable"
+
+  fun falseL i (ctx ===> a) =
+    let
+      val FALSE = List.nth (ctx, i)
+    in
+      ([], fn [] => K.falseL (i, ctx ===> a))
+    end
+    handle _ => raise Fail "falseL not applicable"
+\end{minted}
+The rules for conjunction are a bit more illustrative:
+
+\begin{minted}[mathescape]{sml}
+  fun conjR (ctx ===> r)  =
+    let
+      val p /\ q = r
+    in
+      ([ctx ===> p, ctx ===> q],
+       fn [d1, d2] => K.conjR (d1, d2))
+    end
+    handle _ => raise Fail "conjR not applicable"
+
+  fun conjL1 i (ctx ===> r) =
+    let
+      val p /\ _ = List.nth (ctx, i)
+    in
+      ([p :: ctx ===> r],
+       fn [d] => K.conjL1 (i, d))
+    end
+    handle _ => raise Fail "conjL1 not applicable"
+\end{minted}
+
+We leave the remainder of the refinement rules as an exercise.
+\begin{minted}[mathescape]{sml}
+end
+
+structure R = Refiner (EvidenceKernel)
+\end{minted}
+
+\section{Tactics: combinators for refinement rules}
+
+It is hard to see how to use refinement rules to construct proofs on
+their own. However, there are a number of well-known combinators for
+refinement rules which correspond to \emph{derived rules}; in the
+\LCF{} tradition, derived rules are called \emph{tactics}, and the
+combinators from which thye are built are called \emph{tacticals}.
+
+
+\begin{minted}[mathescape]{sml}
+signature TACTIC =
+sig
+  structure R : REFINER
+  type tactic = R.rule
+
+  val thenl : tactic * tactic list -> tactic
+  val then_ : tactic * tactic -> tactic
+  val orelse_ : tactic * tactic -> tactic
+end
+\end{minted}
+
+The most fundamental tactical is \verb|thenl|; the tactic
+\verb|thenl (t, ts)| uses the tactic \verb|t| to decompose the current
+goal into $n$ subgoals; then, the list of tactics \verb|ts| (also of
+length $n$) is applied \emph{pointwise} to decompose these
+subgoals. Then, the resulting lists of subgoals are all combined into
+a single list. The tactical \verb|then_| is similar, except it uses
+its second argument to decompose \emph{all} of the remaining subgoals.
+
+Finally, the tactic \verb|orelse_ (t1, t2)| tries to decompose the
+current goal with \verb|t1|; if this fails, it continues with
+\verb|t2|.
+
+\subsection{Implementing tacticals}
+
+The implementation of the standard tacticals above is provided below
+as a reference; it relies on some tricky list manipulation, but the
+good news is you only need to implement it once.
+
+\begin{minted}[mathescape]{sml}
+functor Tactic (R : REFINER) : TACTIC =
+struct
+  structure R = R
+  open R
+
+  type tactic = goal -> subgoals * validation
+
+  fun split (_, []) = ([], NONE, [])
+    | split (0, x :: xs) = ([], SOME x, xs)
+    | split (n, x :: xs) =
+      let
+        val (hd, y, tl) = split (n - 1, xs)
+      in
+        (x :: hd, y, tl)
+      end
+
+  fun gobbleWith ([], []) args = []
+    | gobbleWith (n :: ns, f :: fs) args =
+      let
+        val (xs, _, args') = split (n, args)
+      in
+        f xs :: gobbleWith (ns, fs) args'
+      end
+
+  fun stitchProof (validation, subgoalss, validations) =
+    (List.concat subgoalss,
+      validation o
+        gobbleWith (map length subgoalss, validations))
+
+
+  fun then_ (t1, t2) goal =
+    let
+      val (subgoals, validation) = t1 goal
+      val (subgoalss, validations) =
+        ListPair.unzip (List.map t2 subgoals)
+    in
+      stitchProof (validation, subgoalss, validations)
+    end
+
+  fun thenl (t, ts) goal =
+    let
+      val (subgoals, validation) = t goal
+      val (subgoalss, validations) =
+        ListPair.unzip
+          (ListPair.mapEq
+           (fn (t, g) => t g)
+           (ts, subgoals))
+    in
+      stitchProof (validation, subgoalss, validations)
+    end
+
+  fun orelse_ (t1, t2) (goal : goal) =
+    t1 goal handle _ => t2 goal
+end
+
+structure T = Tactic (R)
+open T infix then_ thenl orelse_
+\end{minted}
+
+Now, we can use tactics to capture the backward-inference version of
+the following proof
+\[
+  \infer[\Left{\land}_1]{
+    \Seq{A\land B}{B\land A}
+  }{
+    \infer[\Left{\land}_2]{
+      \Seq{A\land B,A}{B\land A}
+    }{
+      \infer[\Right{\land}]{
+        \Seq{A\land B,A,B}{B\land A}
+      }{
+        \infer[\RuleInit]{
+          \Seq{A\land B,A,B}{B}
+        }{
+        }
+        &
+        \infer[\RuleInit]{
+          \Seq{A\land B,A,B}{A}
+        }{
+        }
+      }
+    }
+  }
+\]
+
+\begin{minted}[mathescape]{sml}
+val t : tactic =
+  R.conjL1 0 then_
+  R.conjL2 1 then_
+  R.conjR thenl
+    [R.init 0,
+     R.init 1]
+
+val result = t ([`"A" /\ `"B"] ===> `"B" /\ `"A")
+val d : proof = #2 result []
+\end{minted}
+
+
+\subsection{Possible extensions}
+
+\LCF{}-style tactics do not satisfy every need; many different
+extensions are possible.
+
+\paragraph{Backtracking}
+  The \verb|orelse_| tactical enables a form of proof search
+  procedure, but it cannot be used to implement backtracking. There
+  are at least two ways to extend \LCF{} with support for
+  backtracking; one way would be using continuations, but the most
+  common way is to replace the type of tactics with something like the
+  following:
+\begin{minted}[mathescape]{sml}
+  type tactic = R.goal -> (R.subgoals * R.validation) stream
+\end{minted}
+
+  Then, a backtracking tactical \verb|par : tactic * tactic -> tactic|
+  will simply merge the results fof applying \emph{both} tactics into
+  a single stream:
+\begin{minted}[mathescape]{sml}
+  fun par (t1, t2) goal =
+    Stream.merge (t1 goal, t2 goal)
+\end{minted}
+
+\paragraph{Existential variables and unification}
+
+It is difficult to capture a usable refinement proof theory for logics
+with extistential quantifiers using pure \LCF{}; rather than having a
+single introduction rule for the existential quantifier, it is
+necessary to have a countable family of such introduction rules,
+parameterized in the actual witness of the existential. This is highly
+disruptive to the refinement proof process, since it may be that one
+only determines how to instantiate the existential $\exists x.A(x)$ by
+attempting to prove the predicate $A$.
+
+To resolve this contradiction, most modern proof assistants add a
+notion of existential variable, which allows one to decompose the goal
+$\exists x.A(x)$ into $A(?x)$; then, later on in this subproof, the
+variable $?x$ can be instantiated by \emph{unification} with something
+concrete (like $?x:= 42$).
+
+Existential variables introduce many complexities into the design of
+\LCF{}-style proof assistants, because of the difficulty (and in some
+cases, impossibility) of finding most-general unifiers. In
+\Coq{}~\cite{coq:reference-manual}, a higher-order unification
+algorithm is used which produces unifiers which are not most
+general~\cite{ziliani:2015}, but because \Coq{} adheres to the \LCF{}
+achitecture, this only affects the ergonomics of the tactic system as
+opposed to the core logic.
+
+On the other hand, higher-order unification is built into the trusted
+kernel of \Isabelle{}, which uses both \emph{dynamic pattern
+  unification} (which produces most general unifiers at the cost of
+being somewhat restrictive) and general higher-order unification,
+which may produce infinitely many unifiers (or none).
+
+One benefit of building unification into the core is that it is
+possible to simplify the notion of proof refinement significantly,
+capturing both forward and backward inference in a single
+kernel~\cite{paulson:1998}; in turn, this obviates the notion of
+\emph{validation}, which is the hardest part of \LCF{}-style tactic
+systems to implement correctly.
+
+\paragraph{Dependent refinement}
+In the context of implementing dependent type theory, it is useful to
+consider a notion of refinement rule in which the \emph{statement} of
+one premise may refer to the \emph{proof} of a previous premise. This
+is best considered a separate issue from the matter of existential
+variables, but concrete implementations of this behavior may either
+use existential variables (as in~\cite{spiwack:2011,asperti:2011}) or not (as
+in~\cite{sterling-harper:2017,redprl:2016}).
+
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\end{document}
+
+%%% Local Variables:
+%%% LaTeX-command: "latex -shell-escape"
+%%% End:
