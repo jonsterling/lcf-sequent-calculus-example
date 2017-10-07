@@ -1,4 +1,5 @@
 .cm
+*.fls
 *.out
 *.x86-darwin
 _minted-lcf-notes

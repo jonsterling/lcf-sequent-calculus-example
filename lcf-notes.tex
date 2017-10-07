@@ -518,9 +518,10 @@ structure R = Refiner (EvidenceKernel)
 
 It is hard to see how to use refinement rules to construct proofs on
 their own. However, there are a number of well-known combinators for
-refinement rules which correspond to \emph{derived rules}; in the
-\LCF{} tradition, derived rules are called \emph{tactics}, and the
-combinators from which thye are built are called \emph{tacticals}.
+refinement rules which correspond to \emph{derived rules} in sequent
+calculus; in the \LCF{} tradition, derived rules are called
+\emph{tactics}, and the combinators from which they are built are
+called \emph{tacticals} (by analogy with \emph{functionals}).
 
 
 \begin{minted}[mathescape]{sml}
@@ -538,10 +539,12 @@ end
 The most fundamental tactical is \verb|thenl|; the tactic
 \verb|thenl (t, ts)| uses the tactic \verb|t| to decompose the current
 goal into $n$ subgoals; then, the list of tactics \verb|ts| (also of
-length $n$) is applied \emph{pointwise} to decompose these
+length $n$) is applied \emph{pointwise} to further decompose these
 subgoals. Then, the resulting lists of subgoals are all combined into
-a single list. The tactical \verb|then_| is similar, except it uses
-its second argument to decompose \emph{all} of the remaining subgoals.
+a single list, which is returned together with a validation that
+performs essentially the inverse process for forward inference. The
+tactical \verb|then_| is similar, except it uses its second argument
+to decompose \emph{all} of the remaining subgoals.
 
 Finally, the tactic \verb|orelse_ (t1, t2)| tries to decompose the
 current goal with \verb|t1|; if this fails, it continues with
@@ -561,19 +564,29 @@ struct
 
   type tactic = goal -> subgoals * validation
 
-  fun split (_, []) = ([], NONE, [])
-    | split (0, x :: xs) = ([], SOME x, xs)
-    | split (n, x :: xs) =
-      let
-        val (hd, y, tl) = split (n - 1, xs)
-      in
-        (x :: hd, y, tl)
-      end
+  local
+    fun go _ [] = ([], [])
+      | go 1 (x::xs) = ([x], xs)
+      | go m (x::xs) =
+        let val
+          (xs', xs'') = go (m - 1) xs
+        in
+          (x::xs', xs'')
+        end
+  in
+    fun splitAt (n, ls) =
+      if n < 0 then
+        raise Subscript
+      else
+        if n = 0 then ([], ls)
+      else
+        go n ls
+  end
 
   fun gobbleWith ([], []) args = []
     | gobbleWith (n :: ns, f :: fs) args =
       let
-        val (xs, _, args') = split (n, args)
+        val (xs, args') = splitAt (n, args)
       in
         f xs :: gobbleWith (ns, fs) args'
       end
