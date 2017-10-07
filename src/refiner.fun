@@ -15,6 +15,12 @@ struct
 
   val prettyGoal = Sequent.pretty
 
+  fun init i (ctx ===> p) =
+    if List.nth (ctx, i) = p then 
+      ([], fn rho => K.hyp (ctx, i))
+    else
+      raise Fail "init"
+
   val trueR = 
     fn ctx ===> TRUE => ([], fn rho => K.unit ctx)
      | _ => raise Fail "trueR"

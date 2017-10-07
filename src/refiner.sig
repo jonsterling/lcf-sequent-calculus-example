@@ -13,6 +13,8 @@ sig
 
   type hyp = K.S.hyp
 
+  val init : hyp -> rule
+
   val trueR : rule
   val falseL : hyp -> rule
 
