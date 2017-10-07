@@ -657,25 +657,6 @@ val d : proof = #2 result []
 \LCF{}-style tactics do not satisfy every need; many different
 extensions are possible.
 
-\paragraph{Backtracking}
-  The \verb|orelse_| tactical enables a form of proof search
-  procedure, but it cannot be used to implement backtracking. There
-  are at least two ways to extend \LCF{} with support for
-  backtracking; one way would be using continuations, but the most
-  common way is to replace the type of tactics with something like the
-  following:
-\begin{minted}[mathescape]{sml}
-  type tactic = R.goal -> (R.subgoals * R.validation) stream
-\end{minted}
-
-  Then, a backtracking tactical \verb|par : tactic * tactic -> tactic|
-  will simply merge the results fof applying \emph{both} tactics into
-  a single stream:
-\begin{minted}[mathescape]{sml}
-  fun par (t1, t2) goal =
-    Stream.merge (t1 goal, t2 goal)
-\end{minted}
-
 \paragraph{Existential variables and unification}
 
 It is difficult to capture a usable refinement proof theory for logics
@@ -694,13 +675,15 @@ variable $?x$ can be instantiated by \emph{unification} with something
 concrete (like $?x:= 42$).
 
 Existential variables introduce many complexities into the design of
-\LCF{}-style proof assistants, because of the difficulty (and in some
-cases, impossibility) of finding most-general unifiers. In
+\LCF{}-style proof assistants, partly because of the difficulty (and
+in some cases, impossibility) of finding most-general unifiers. In
 \Coq{}~\cite{coq:reference-manual}, a higher-order unification
 algorithm is used which produces unifiers which are not most
 general~\cite{ziliani:2015}, but because \Coq{} adheres to the \LCF{}
 achitecture, this only affects the ergonomics of the tactic system as
-opposed to the core logic.
+opposed to the core logic. Additionally, existential variables disrupt
+the \emph{local} character of \LCF{}-style proof refinement: every
+refinement step can affect the whole proof state.
 
 On the other hand, higher-order unification is built into the trusted
 kernel of \Isabelle{}, which uses both \emph{dynamic pattern
@@ -714,6 +697,32 @@ capturing both forward and backward inference in a single
 kernel~\cite{paulson:1998}; in turn, this obviates the notion of
 \emph{validation}, which is the hardest part of \LCF{}-style tactic
 systems to implement correctly.
+
+
+\paragraph{Backtracking}
+The \verb|orelse_| tactical enables a form of proof search procedure,
+but it cannot be used to implement backtracking. There are at least
+two ways to extend \LCF{} with support for backtracking; one way would
+be using continuations, but the most common way is to replace the type
+of tactics with something that returns a stream of proof states as
+follows:
+\begin{minted}[mathescape]{sml}
+type tactic = R.goal -> (R.subgoals * R.validation) Stream.stream
+\end{minted}
+
+Then, a backtracking tactical \verb|par : tactic * tactic -> tactic|
+will simply merge the results of applying \emph{both} tactics into a
+single stream:
+\begin{minted}[mathescape]{sml}
+fun par (t1, t2) goal =
+  Stream.merge (t1 goal, t2 goal)
+\end{minted}
+
+Support for backtracking is useful in any proof assistant, but becomes
+absolutely essential in the presence of existential
+variables. Backtracking using streams of results was first introduced
+in \Isabelle.
+
 
 \paragraph{Dependent refinement}
 In the context of implementing dependent type theory, it is useful to
