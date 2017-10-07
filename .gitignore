@@ -1,10 +1,11 @@
 .cm
 *.out
 *.x86-darwin
-_minted-notes
+_minted-lcf-notes
 *.bbl
 *.aux
 *.blg
 *.log
 *~
 auto
+*.fdb_latexmk
