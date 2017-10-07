@@ -117,7 +117,7 @@ val rec depth =
 fun depth TRUE = 0
   | depth FALSE = 0
   | depth (`_) = 0
-  | depth (a /\ b) = Int.max (depth a, depth b)
+  | depth (a /\ b) = Int.max (depth a, depth b) + 1
   (* $\cdots$ *)
 \end{minted}
 
