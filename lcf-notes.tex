@@ -708,23 +708,23 @@ The \verb|orelse_| tactical enables a form of proof search procedure,
 but it cannot be used to implement backtracking. There are at least
 two ways to extend \LCF{} with support for backtracking; one way would
 be using continuations, but the most common way is to replace the type
-of tactics with something that returns a stream of proof states as
-follows:
+of tactics with something that returns a (lazy) sequence of proof
+states as follows:
 \begin{minted}[mathescape]{sml}
-type tactic = R.goal -> (R.subgoals * R.validation) Stream.stream
+type tactic = R.goal -> (R.subgoals * R.validation) Seq.seq
 \end{minted}
 
 Then, a backtracking tactical \verb|par : tactic * tactic -> tactic|
 will simply merge the results of applying \emph{both} tactics into a
-single stream:
+single sequence:
 \begin{minted}[mathescape]{sml}
 fun par (t1, t2) goal =
-  Stream.merge (t1 goal, t2 goal)
+  Sequence.merge (t1 goal, t2 goal)
 \end{minted}
 
 Support for backtracking is useful in any proof assistant, but becomes
 absolutely essential in the presence of existential
-variables. Backtracking using streams of results was first introduced
+variables. Backtracking using sequences of results was first introduced
 in \Isabelle.
 
 
