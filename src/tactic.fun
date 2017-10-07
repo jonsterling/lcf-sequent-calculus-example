@@ -1,26 +1,17 @@
 structure ListUtil :
 sig
-  val splitAt : int * 'a list -> 'a list * 'a list
+  val splitAt : 'a list * int -> 'a list * 'a list
 end =
 struct
-  local
-    fun go _ [] = ([], [])
-      | go 1 (x::xs) = ([x], xs)
-      | go m (x::xs) =
-        let val
-          (xs', xs'') = go (m - 1) xs
-        in
-          (x::xs', xs'')
-        end
-  in
-    fun splitAt (n, ls) =
-      if n < 0 then
-        raise Subscript
-      else
-        if n = 0 then ([], ls)
-      else
-        go n ls
-  end
+  fun splitAt (xs, i) = 
+    let
+      val rec loop = 
+        fn (0, ac, xs) => (List.rev ac, xs)
+         | (n, ac, []) => raise Empty
+         | (n, ac, x::xs) => loop (i - 1, x :: ac, xs)
+    in
+      loop (i, [], xs)
+    end
 end
 
 functor Tactic (R : REFINER) : TACTIC = 
@@ -32,7 +23,7 @@ struct
   fun gobbleWith ([], []) args = []
     | gobbleWith (n :: ns, f :: fs) args = 
       let
-        val (xs, args') = ListUtil.splitAt (n, args)
+        val (xs, args') = ListUtil.splitAt (args, n)
       in
         f xs :: gobbleWith (ns, fs) args'
       end

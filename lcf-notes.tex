@@ -564,29 +564,20 @@ struct
 
   type tactic = goal -> subgoals * validation
 
-  local
-    fun go _ [] = ([], [])
-      | go 1 (x::xs) = ([x], xs)
-      | go m (x::xs) =
-        let val
-          (xs', xs'') = go (m - 1) xs
-        in
-          (x::xs', xs'')
-        end
-  in
-    fun splitAt (n, ls) =
-      if n < 0 then
-        raise Subscript
-      else
-        if n = 0 then ([], ls)
-      else
-        go n ls
-  end
+  fun splitAt (xs, i) =
+    let
+      val rec loop =
+        fn (0, ac, xs) => (List.rev ac, xs)
+         | (n, ac, []) => raise Empty
+         | (n, ac, x::xs) => loop (i - 1, x :: ac, xs)
+    in
+      loop (i, [], xs)
+    end
 
   fun gobbleWith ([], []) args = []
     | gobbleWith (n :: ns, f :: fs) args =
       let
-        val (xs, args') = splitAt (n, args)
+        val (xs, args') = splitAt (args, n)
       in
         f xs :: gobbleWith (ns, fs) args'
       end
