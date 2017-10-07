@@ -1,9 +1,4 @@
-(* The kernel implements *forward inference*, which is reasoning from premises to conclusion.
-    Sequent calculus works best in *backward inference*, so for the kernel, we use natural
-    deduction terms as proofs. Check out the REFINER module, which implements backward inference,
-    to see how sequent rules are developed; the validations of the refinement/backward inference rules
-    there witness the soundness of sequent calculus for natural dedution. *)
-
+(* This trusted kernel implements *forward inference*, which is reasoning from premises to conclusion. *)
 structure TermData = 
 struct
   type hyp = int
@@ -11,17 +6,17 @@ struct
   type context = Sequent.context
 
   datatype 'a term = 
-     HYP of hyp
-   | UNIT
-   | ABORT of 'a
-   | PAIR of 'a * 'a
-   | FST of 'a
-   | SND of 'a
-   | INL of 'a
-   | INR of 'a
-   | CASE of 'a * ('a * 'a)
-   | LAM of 'a
-   | APP of 'a * 'a
+     INIT of hyp
+   | TRUER
+   | FALSEL of hyp
+   | CONJR of 'a * 'a
+   | CONJL1 of hyp * 'a
+   | CONJL2 of hyp * 'a
+   | DISJR1 of 'a
+   | DISJR2 of 'a
+   | DISJL of hyp * 'a * 'a
+   | IMPLR of 'a
+   | IMPLL of hyp * 'a * 'a
 end
 
 signature KERNEL = 
@@ -45,22 +40,19 @@ sig
   val infer : proof -> S.sequent
   val check : S.sequent -> proof -> unit
 
-  (* instantiate the first hypothesis  *)
-  val push : proof * proof -> proof
+  val init : S.context * S.hyp -> proof
 
-  val hyp : S.context * S.hyp -> proof
+  val trueR : S.context -> proof
+  val falseL : S.context * S.hyp * P.prop -> proof
 
-  val unit : S.context -> proof
-  val abort : proof * P.prop -> proof
+  val conjR : proof * proof -> proof
+  val conjL1 : S.hyp * proof -> proof
+  val conjL2 : S.hyp * proof -> proof
 
-  val pair : proof * proof -> proof
-  val fst : proof -> proof
-  val snd : proof -> proof
+  val disjR1 : proof * P.prop -> proof
+  val disjR2 : P.prop * proof -> proof
+  val disjL : S.hyp * proof * proof -> proof
 
-  val inl : proof * P.prop -> proof
-  val inr : P.prop * proof -> proof
-  val case_ : proof * (proof * proof) -> proof
-
-  val lam : proof -> proof
-  val app : proof * proof -> proof
+  val implR : proof -> proof
+  val implL : S.hyp * proof * proof -> proof
 end

@@ -17,21 +17,21 @@ struct
 
   fun init i (ctx ===> p) =
     if List.nth (ctx, i) = p then 
-      ([], fn rho => K.hyp (ctx, i))
+      ([], fn rho => K.init (ctx, i))
     else
       raise Fail "init"
 
   val trueR = 
-    fn ctx ===> TRUE => ([], fn rho => K.unit ctx)
+    fn ctx ===> TRUE => ([], fn rho => K.trueR ctx)
      | _ => raise Fail "trueR"
 
   fun falseL i (ctx ===> p) =
-    ([], fn rho => K.abort (K.hyp (ctx, i), p))
+    ([], fn rho => K.falseL (ctx, i,p))
 
   val conjR = 
     fn ctx ===> p /\ q =>
        ([ctx ===> p, ctx ===> q],
-        fn [d1, d2] => K.pair (d1, d2))
+        fn [d1, d2] => K.conjR (d1, d2))
      | _ => raise Fail "conjR"
 
   fun conjL1 i (ctx ===> r) =
@@ -39,7 +39,7 @@ struct
       val p /\ _ = List.nth (ctx, i)
     in
       ([p :: ctx ===> r],
-       fn [d] => K.push (K.fst (K.hyp (ctx, i)), d))
+       fn [d] => K.conjL1 (i, d))
     end
 
   fun conjL2 i (ctx ===> r) = 
@@ -47,19 +47,19 @@ struct
       val _ /\ q = List.nth (ctx, i)
     in
       ([q :: ctx ===> r],
-       fn [d] => K.push (K.snd (K.hyp (ctx, i)), d))
+       fn [d] => K.conjL2 (i, d))
     end
 
   val disjR1 = 
     fn ctx ===> p \/ q => 
        ([ctx ===> p],
-        fn [d] => K.inl (d, q))
+        fn [d] => K.disjR1 (d, q))
      | _ => raise Fail "disjR1"
 
   val disjR2 = 
     fn ctx ===> p \/ q => 
        ([ctx ===> q],
-        fn [d] => K.inr (p, d))
+        fn [d] => K.disjR2 (p, d))
      | _ => raise Fail "disjR2"
 
   fun disjL i (ctx ===> r) = 
@@ -67,13 +67,13 @@ struct
       val p \/ q = List.nth (ctx, i)
     in
       ([p :: ctx ===> r, q :: ctx ===> r],
-       fn [d1, d2] => K.case_ (K.hyp (ctx, i), (d1, d2)))
+       fn [d1, d2] => K.disjL (i, d1, d2))
     end
 
   val implR = 
     fn ctx ===> p ~> q =>
        ([p :: ctx ===> q],
-        fn [d] => K.lam d)
+        fn [d] => K.implR d)
      | _ => raise Fail "implR"
 
   fun implL i (ctx ===> r) = 
@@ -81,7 +81,7 @@ struct
       val p ~> q = List.nth (ctx, i)
     in
       ([ctx ===> p, q :: ctx ===> r],
-       fn [d1, d2] => K.push (K.app (K.hyp (ctx, i), d1), d2))
+       fn [d1, d2] => K.implL (i, d1, d2))
     end
 end
 
