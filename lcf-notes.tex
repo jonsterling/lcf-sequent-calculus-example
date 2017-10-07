@@ -380,7 +380,7 @@ fun pretty (d : proof) : string =
 It is often frustrating to construct proofs manually using the
 primitives that are exposed by a forward inference kernel
 \verb|K:KERNEL|. Informally, sequent calculus is optimized for upward
-(backward) inference from premise to conclusion; the kernel seems to
+(backward) inference from conclusion to premises; the kernel seems to
 force us to perform proofs inside-out. When using the kernel, it is
 also necessary to pass annoying parameters, such as the context
 parameter in \verb|K.trueR|.
