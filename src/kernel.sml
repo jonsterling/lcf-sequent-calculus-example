@@ -63,7 +63,7 @@ struct
   fun conjL1 (i, d as ctx ===> r BY _) =
     let
       val p :: ctx' = ctx
-      val p' /\ q = List.nth (ctx, i)
+      val p' /\ q = List.nth (ctx', i)
       val true = p = p'
     in
       ctx' ===> r BY CONJL1 (i, d)
@@ -73,7 +73,7 @@ struct
   fun conjL2 (i, d as ctx ===> r BY _) =
     let
       val q :: ctx' = ctx
-      val p /\ q' = List.nth (ctx, i)
+      val p /\ q' = List.nth (ctx', i)
       val true = q = q'
     in
       ctx' ===> r BY CONJL2 (i, d)

@@ -35,7 +35,7 @@ struct
   fun pretty k = 
     fn TRUE => "true"
      | FALSE => "false"
-     | ATOM a => a
+     | ` a => a
      | p /\ q => Pretty.infix_ Prec.conj (pretty, pretty) k (p, "/\\", q)
      | p \/ q => Pretty.infix_ Prec.disj (pretty, pretty) k (p, "\\/", q)
      | p ~> q => Pretty.infix_ Prec.impl (pretty, pretty) k (p, "~>", q)

@@ -6,7 +6,7 @@ struct
    | /\ of prop * prop
    | \/ of prop * prop
    | ~> of prop * prop
-   | ATOM of string
+   | ` of string
 
   type context = prop list
   type hyp = int

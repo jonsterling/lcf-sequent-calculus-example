@@ -3,15 +3,24 @@ sig
   val splitAt : 'a list * int -> 'a list * 'a list
 end =
 struct
-  fun splitAt (xs, i) = 
-    let
-      val rec loop = 
-        fn (0, ac, xs) => (List.rev ac, xs)
-         | (n, ac, []) => raise Empty
-         | (n, ac, x::xs) => loop (i - 1, x :: ac, xs)
-    in
-      loop (i, [], xs)
-    end
+  local
+    fun go _ [] = ([], [])
+      | go 1 (x::xs) = ([x], xs)
+      | go m (x::xs) =
+        let val
+          (xs', xs'') = go (m - 1) xs
+        in
+          (x::xs', xs'')
+        end
+  in
+    fun splitAt (ls, n) =
+      if n < 0 then
+        raise Subscript
+      else
+        if n = 0 then ([], ls)
+      else
+        go n ls
+  end
 end
 
 functor Tactic (R : REFINER) : TACTIC = 

@@ -12,3 +12,5 @@ Group is
 
   src/kernel.sml
   src/refiner.fun
+
+  src/test.sml
