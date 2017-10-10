@@ -353,7 +353,7 @@ struct
   fun conjL1 (i, d as ctx ===> r BY _) =
     let
       val p :: ctx' = ctx
-      val p' /\ q = List.nth (ctx, i)
+      val p' /\ q = List.nth (ctx', i)
       val true = p = p'
     in
       ctx' ===> r BY CONJ_L1 (i, d)
@@ -566,12 +566,10 @@ struct
 
   fun splitAt (xs, i) =
     let
-      val rec loop =
-        fn (0, ac, xs) => (List.rev ac, xs)
-         | (n, ac, []) => raise Empty
-         | (n, ac, x::xs) => loop (i - 1, x :: ac, xs)
+      val front = List.take (xs, i)
+      val back = List.drop (xs, i)
     in
-      loop (i, [], xs)
+      (front, back)
     end
 
   fun gobbleWith ([], []) args = []
