@@ -1,38 +1,21 @@
-structure ListUtil :
-sig
-  val splitAt : 'a list * int -> 'a list * 'a list
-end =
-struct
-  local
-    fun go _ [] = ([], [])
-      | go 1 (x::xs) = ([x], xs)
-      | go m (x::xs) =
-        let val
-          (xs', xs'') = go (m - 1) xs
-        in
-          (x::xs', xs'')
-        end
-  in
-    fun splitAt (ls, n) =
-      if n < 0 then
-        raise Subscript
-      else
-        if n = 0 then ([], ls)
-      else
-        go n ls
-  end
-end
-
 functor Tactic (R : REFINER) : TACTIC = 
 struct
   open R
 
   type tactic = goal -> subgoals * validation
 
+  fun splitAt (xs, i) =
+    let
+      val front = List.take (xs, i)
+      val back = List.drop (xs, i)
+    in
+      (front, back)
+    end
+
   fun gobbleWith ([], []) args = []
     | gobbleWith (n :: ns, f :: fs) args = 
       let
-        val (xs, args') = ListUtil.splitAt (args, n)
+        val (xs, args') = splitAt (args, n)
       in
         f xs :: gobbleWith (ns, fs) args'
       end
